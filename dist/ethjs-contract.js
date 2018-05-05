@@ -2930,6 +2930,7 @@ function decodeParams(names, types, data) {
   var offset = 0;
   types.forEach(function (type, index) {
     var coder = getParamCoder(type);
+
     if (coder.dynamic) {
       var dynamicOffset = uint256Coder.decode(data, offset);
       var result = coder.decode(data, dynamicOffset.value.toNumber());
@@ -2938,7 +2939,11 @@ function decodeParams(names, types, data) {
       var result = coder.decode(data, offset);
       offset += result.consumed;
     }
-    if (useNumberedParams) values[index] = result.value;
+
+    if (useNumberedParams) {
+      values[index] = result.value;
+    }
+
     if (names[index]) {
       values[names[index]] = result.value;
     }
@@ -2946,13 +2951,19 @@ function decodeParams(names, types, data) {
   return values;
 }
 
-// encode method ABI object with values in an array, output bytecode
-function encodeMethod(method, values) {
+// create an encoded method signature from an ABI object
+function encodeSignature(method) {
   var signature = method.name + '(' + utils.getKeys(method.inputs, 'type').join(',') + ')';
   var signatureEncoded = '0x' + new Buffer(utils.keccak256(signature), 'hex').slice(0, 4).toString('hex');
+
+  return signatureEncoded;
+}
+
+// encode method ABI object with values in an array, output bytecode
+function encodeMethod(method, values) {
   var paramsEncoded = encodeParams(utils.getKeys(method.inputs, 'type'), values).substring(2);
 
-  return '' + signatureEncoded + paramsEncoded;
+  return '' + encodeSignature(method) + paramsEncoded;
 }
 
 // decode method data bytecode, from method ABI object
@@ -2970,6 +2981,7 @@ function encodeEvent(eventObject, values) {
 
 function eventSignature(eventObject) {
   var signature = eventObject.name + '(' + utils.getKeys(eventObject.inputs, 'type').join(',') + ')';
+
   return '0x' + utils.keccak256(signature);
 }
 
@@ -2984,6 +2996,7 @@ function decodeEvent(eventObject, data, topics) {
   var nonIndexedTypes = utils.getKeys(nonIndexed, 'type');
   var event = decodeParams(nonIndexedNames, nonIndexedTypes, utils.hexOrBuffer(data), useNumberedParams);
   var topicOffset = eventObject.anonymous ? 0 : 1;
+
   eventObject.inputs.filter(function (input) {
     return input.indexed;
   }).map(function (input, i) {
@@ -2991,7 +3004,9 @@ function decodeEvent(eventObject, data, topics) {
     var coder = getParamCoder(input.type);
     event[input.name] = coder.decode(topic, 0).value;
   });
+
   event._eventName = eventObject.name;
+
   return event;
 }
 
@@ -3034,7 +3049,8 @@ module.exports = {
   decodeEvent: decodeEvent,
   decodeLogItem: decodeLogItem,
   logDecoder: logDecoder,
-  eventSignature: eventSignature
+  eventSignature: eventSignature,
+  encodeSignature: encodeSignature
 };
 /* WEBPACK VAR INJECTION */}.call(exports, __webpack_require__(6).Buffer))
 
@@ -7371,6 +7387,7 @@ function Contract() {
   self.bytecode = opts.contractBytecode || '0x';
   self.defaultTxObject = opts.contractDefaultTxObject || {};
   self.filters = new EthFilter(self.query);
+  self.decodeLogs = abi.logDecoder(self.abi);
 
   getCallableMethodsFromABI(self.abi).forEach(function (methodObject) {
     if (methodObject.type === 'function') {

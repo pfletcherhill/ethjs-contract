@@ -15,6 +15,7 @@ function Contract(opts = {}) {
   self.bytecode = opts.contractBytecode || '0x';
   self.defaultTxObject = opts.contractDefaultTxObject || {};
   self.filters = new EthFilter(self.query);
+  self.decodeLogs = abi.logDecoder(self.abi);
 
   getCallableMethodsFromABI(self.abi).forEach((methodObject) => {
     if (methodObject.type === 'function') {
